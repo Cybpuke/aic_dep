@@ -123,3 +123,6 @@ Validate your ~/.ssh/config
 Check permissions (ls -l ~/.ssh)
 
 Or give you a one-command clone version
+read -s -p "GitHub PAT: " TOKEN; echo
+git clone https://github.com/teknozor/aiCompliance.git
+unset TOKEN
