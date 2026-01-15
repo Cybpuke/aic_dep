@@ -1,25 +1,51 @@
-sudo systemctl stop docker
-sudo systemctl stop containerd
+Yep — you can stop using the system containerd service and make Docker use only its own storage under /mnt/data/docker, then redeploy.
 
-sudo mkdir -p /mnt/data/containerd
-sudo rsync -aHAX --numeric-ids /var/lib/containerd/ /mnt/data/containerd/
+Important detail (so you don’t get stuck): Docker internally uses containerd components, so on RHEL you usually should not uninstall the containerd.io package if Docker depends on it. What you want is to disable the system containerd service and remove Docker’s “external containerd socket” config.
 
-# Ensure containerd config exists
-if [ ! -f /etc/containerd/config.toml ]; then
-  sudo mkdir -p /etc/containerd
-  sudo containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
-fi
+Here’s the clean reset.
 
-# Set containerd root to /mnt/data/containerd
-sudo sed -i 's|^root = .*|root = "/mnt/data/containerd"|' /etc/containerd/config.toml
+A) Stop everything
+sudo systemctl stop docker docker.socket 2>/dev/null || true
+sudo systemctl stop containerd containerd.service 2>/dev/null || true
 
-# Move old dir out of the way (safe rollback)
-sudo mv /var/lib/containerd /var/lib/containerd.bak
-sudo mkdir -p /var/lib/containerd
+B) Disable system containerd service (so Docker won’t talk to it)
+sudo systemctl disable --now containerd 2>/dev/null || true
+sudo systemctl mask containerd 2>/dev/null || true
 
-sudo systemctl start containerd
+
+Check it’s really inactive:
+
+systemctl is-active containerd || true
+
+C) Reset Docker to use /mnt/data/docker only
+
+Edit /etc/docker/daemon.json to remove any "containerd": "unix:///run/containerd/containerd.sock" line.
+
+Quick way: overwrite with a minimal correct config:
+
+sudo mkdir -p /etc/docker
+cat <<'EOF' | sudo tee /etc/docker/daemon.json
+{
+  "data-root": "/mnt/data/docker"
+}
+EOF
+
+D) Clean the old containerd data on / (frees space)
+
+Only do this after containerd is stopped/masked.
+
+sudo rm -rf /var/lib/containerd
+sudo rm -rf /etc/containerd
+
+
+Also make sure the target path exists:
+
+sudo mkdir -p /mnt/data/docker
+
+E) Start Docker and verify it uses the right path
+sudo systemctl daemon-reload
 sudo systemctl start docker
+docker info | egrep -i 'Docker Root Dir|containerd'
 
-# Verify
-containerd config dump | egrep '^(root|state)'
-df -h / /mnt/data
+
+You must see:
