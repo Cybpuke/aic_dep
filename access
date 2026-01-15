@@ -1,62 +1,12 @@
-1️⃣ Remove old Docker / containerd (clean slate)
-sudo systemctl stop docker docker.socket containerd || true
-sudo apt-get remove -y docker docker-engine docker.io docker-ce docker-ce-cli containerd runc || true
-sudo rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/containerd
+Create DB folder and permissions
+sudo mkdir -p /mnt/data/postgres
+sudo chown -R 999:999 /mnt/data/postgres
 
-2️⃣ Install Docker (official Ubuntu method)
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg lsb-release
+Edit docker-compose.yml for db volume
 
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+Change your db service to:
 
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-
-⚠️ Do NOT start Docker yet
-
-3️⃣ Ensure /mnt/data mounts at boot (VERY IMPORTANT)
-
-Check UUID:
-
-sudo blkid /dev/sdb
-
-
-Edit fstab:
-
-sudo nano /etc/fstab
-
-
-Add (adjust UUID and filesystem):
-
-UUID=xxxx-xxxx  /mnt/data  ext4  defaults  0  2
-
-
-Test:
-
-sudo mount -a
-
-4️⃣ Configure Docker to use /mnt/data/docker
-sudo mkdir -p /mnt/data/docker
-sudo mkdir -p /etc/docker
-
-cat <<'EOF' | sudo tee /etc/docker/daemon.json
-{
-  "data-root": "/mnt/data/docker",
-  "storage-driver": "overlay2"
-}
-EOF
-
-sudo chmod 600 /etc/docker/daemon.json
-
-5️⃣ Start Docker
-sudo systemctl daemon-reload
-sudo systemctl enable docker
-sudo systemctl start docker
+services:
+  db:
+    volumes:
+      - /mnt/data/postgres:/var/lib/postgresql/data
