@@ -1,78 +1,56 @@
-git clone https://github.com/teknozor/aiCompliance 
+Got it — if you’re using Docker, then Docker is filling up / because Docker’s default data directory is:
 
-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
+/var/lib/docker (on /, which is 100% full in your screenshot)
 
-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
-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
-Got you. Here’s the simplest step-by-step to “connect your GitHub account” on this RHEL server so that git clone works directly (no surprises).
+Even if /mnt/data on /dev/sdb has tons of space, Docker won’t use it unless you move Docker’s data-root there.
 
-Step 1 — Make sure git is installed
-git --version || sudo yum -y install git
+Here’s the clean, safe way.
 
-Step 2 — Clear any wrong saved credentials (important)
+0) Confirm Docker data directory and size
+docker info 2>/dev/null | egrep -i 'Docker Root Dir|Storage Driver'
+sudo du -sh /var/lib/docker 2>/dev/null
+df -h /
+df -h /mnt/data
 
-If you previously tried with bad username/token, Git might be reusing it silently.
-
-git config --global --unset credential.helper 2>/dev/null || true
-rm -f ~/.git-credentials
-
-Step 3 — Set git to remember your login (so clone works “directly” later)
-
-Pick ONE of these:
-
-Option A (recommended): cache in memory (no file on disk)
-git config --global credential.helper 'cache --timeout=28800'
+1) Stop Docker
+sudo systemctl stop docker
+sudo systemctl stop docker.socket 2>/dev/null || true
 
 
-(8 hours)
+Check it’s stopped:
 
-Option B: store on disk (most “direct”, but less secure)
-git config --global credential.helper store
+sudo systemctl is-active docker || true
 
-Step 4 — Verify your PAT works (connectivity + account)
+2) Copy Docker data to /mnt/data
+sudo mkdir -p /mnt/data/docker
+sudo rsync -aHAX --numeric-ids /var/lib/docker/ /mnt/data/docker/
 
-This confirms your token is valid before cloning.
+3) Tell Docker to use /mnt/data/docker as its root
 
-read -s -p "GitHub PAT (classic): " TOKEN; echo
-curl -s -H "Authorization: token $TOKEN" https://api.github.com/user | head
-unset TOKEN
+Create/update /etc/docker/daemon.json:
 
+sudo mkdir -p /etc/docker
+cat <<'EOF' | sudo tee /etc/docker/daemon.json
+{
+  "data-root": "/mnt/data/docker"
+}
+EOF
 
-✅ If you see JSON with "login": "..." → your account auth is working.
+4) Move old directory out of the way (don’t delete yet)
+sudo mv /var/lib/docker /var/lib/docker.bak
+sudo mkdir -p /var/lib/docker
 
-If you see Bad credentials → token is wrong/expired (generate a new PAT classic).
-
-Step 5 — Verify you can access THAT repo with your PAT
-read -s -p "GitHub PAT (classic): " TOKEN; echo
-curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: token $TOKEN" https://api.github.com/repos/teknozor/aiCompliance
-unset TOKEN
-
-
-200 ✅ you have access
-
-404 ❌ you don’t have permission to that repo (private or restricted)
-
-403 ❌ token lacks scope/policy (needs repo scope for private repos)
-
-Step 6 — Clone (and “connect” by entering username + PAT once)
-
-Now do the clone normally:
-
-git clone https://github.com/teknozor/aiCompliance.git
+5) Start Docker and verify
+sudo systemctl daemon-reload
+sudo systemctl start docker
+sudo systemctl status docker --no-pager
 
 
-When it asks:
+Verify Docker is now using the new path:
 
-Username: your GitHub username (exactly)
+docker info | grep -i "Docker Root Dir"
 
-Password: paste your PAT (not GitHub password)
 
-If you set credential helper in Step 3, next time it will just work.
+You should see:
 
-If you want “no prompt ever” (still safe-ish)
-
-Use GitHub CLI (gh) to login once, then clone. (Optional)
-
-sudo yum -y install gh 2>/dev/null || true
-gh auth login -p https -h github.com
-gh repo clone teknozor/aiCompliance
+Docker Root Dir: /mnt/data/docker
