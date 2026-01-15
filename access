@@ -37,3 +37,12 @@ ssh -T git@github.com
 Clone via SSH:
 
 git clone git@github.com:teknozor/aiCompliance.git
+
+
+
+
+
+
+
+
+ssh-keygen -t ed25519 -f ~/.ssh/aiCompliance_deploy -C "aiCompliance deploy key"
