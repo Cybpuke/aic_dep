@@ -4,128 +4,75 @@ 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
 
 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
 
+Got you. Here’s the simplest step-by-step to “connect your GitHub account” on this RHEL server so that git clone works directly (no surprises).
 
-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
+Step 1 — Make sure git is installed
+git --version || sudo yum -y install git
 
-Option B (recommended): Use SSH (no tokens, no prompts)
+Step 2 — Clear any wrong saved credentials (important)
 
-Generate an SSH key (if you don’t already have one):
+If you previously tried with bad username/token, Git might be reusing it silently.
 
-ssh-keygen -t ed25519 -C "your_email@example.com"
+git config --global --unset credential.helper 2>/dev/null || true
+rm -f ~/.git-credentials
 
+Step 3 — Set git to remember your login (so clone works “directly” later)
 
-Press Enter through prompts (or set a passphrase).
+Pick ONE of these:
 
-Start ssh-agent and add the key:
-
-eval "$(ssh-agent -s)"
-ssh-add ~/.ssh/id_ed25519
-
-
-Copy the public key and add it to GitHub:
-
-cat ~/.ssh/id_ed25519.pub
+Option A (recommended): cache in memory (no file on disk)
+git config --global credential.helper 'cache --timeout=28800'
 
 
-GitHub → Settings → SSH and GPG keys → New SSH key
+(8 hours)
 
-Test:
+Option B: store on disk (most “direct”, but less secure)
+git config --global credential.helper store
 
-ssh -T git@github.com
+Step 4 — Verify your PAT works (connectivity + account)
 
+This confirms your token is valid before cloning.
 
-Clone via SSH:
-
-git clone git@github.com:teknozor/aiCompliance.git
-
-
-
-
-
-
-
-
-ssh-keygen -t ed25519 -f ~/.ssh/aiCompliance_deploy -C "aiCompliance deploy key"
-
-n2) Add the PUBLIC key as a Deploy Key in GitHub
-
-On GitHub:
-
-Repo → Settings
-
-Deploy keys
-
-Add new
-
-Title: rhel-server-aiCompliance
-
-Key: paste the content of:
-
-cat ~/.ssh/aiCompliance_deploy.pub
-
-
-✅ Leave “Allow write access” UNCHECKED (unless you need push)
-
-Save
-
-3) Configure SSH to use this key for this repo
-
-Edit SSH config:
-
-cat >> ~/.ssh/config <<'EOF'
-Host github.com-aiCompliance
-  HostName ssh.github.com
-  Port 443
-  User git
-  IdentityFile ~/.ssh/aiCompliance_deploy
-  IdentitiesOnly yes
-EOF
-
-chmod 600 ~/.ssh/config
-
-
-(Using port 443 avoids your previous hanging issue.)
-
-4) Clone using the deploy key
-git clone github.com-aiCompliance:teknozor/aiCompliance.git
-
-5) Test SSH explicitly (optional but useful)
-ssh -T github.com-aiCompliance
-
-
-Expected:
-
-Hi! You've successfully authenticated, but GitHub does not provide shell access.
-
-When SHOULD you check “Allow write access”?
-
-Only if:
-
-This server needs to push commits
-
-Or tag releases
-
-Or write back CI results
-
-For installation / read-only usage → ❌ do not enable it
-
-Why this is ideal for your case
-
-✔ Works even if port 22 is blocked
-✔ No GitHub password or token stored
-✔ Least-privilege security
-✔ Stable for servers & automation
-
-If you want, I can:
-
-Validate your ~/.ssh/config
-
-Check permissions (ls -l ~/.ssh)
-
-Or give you a one-command clone version
-read -s -p "GitHub PAT: " TOKEN; echo
-git clone https://github.com/teknozor/aiCompliance.git
+read -s -p "GitHub PAT (classic): " TOKEN; echo
+curl -s -H "Authorization: token $TOKEN" https://api.github.com/user | head
 unset TOKEN
 
 
-git clone https://badislaffet1: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@github.com/teknozor/aiCompliance.git
+✅ If you see JSON with "login": "..." → your account auth is working.
+
+If you see Bad credentials → token is wrong/expired (generate a new PAT classic).
+
+Step 5 — Verify you can access THAT repo with your PAT
+read -s -p "GitHub PAT (classic): " TOKEN; echo
+curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: token $TOKEN" https://api.github.com/repos/teknozor/aiCompliance
+unset TOKEN
+
+
+200 ✅ you have access
+
+404 ❌ you don’t have permission to that repo (private or restricted)
+
+403 ❌ token lacks scope/policy (needs repo scope for private repos)
+
+Step 6 — Clone (and “connect” by entering username + PAT once)
+
+Now do the clone normally:
+
+git clone https://github.com/teknozor/aiCompliance.git
+
+
+When it asks:
+
+Username: your GitHub username (exactly)
+
+Password: paste your PAT (not GitHub password)
+
+If you set credential helper in Step 3, next time it will just work.
+
+If you want “no prompt ever” (still safe-ish)
+
+Use GitHub CLI (gh) to login once, then clone. (Optional)
+
+sudo yum -y install gh 2>/dev/null || true
+gh auth login -p https -h github.com
+gh repo clone teknozor/aiCompliance
