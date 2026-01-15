@@ -46,3 +46,80 @@ git clone git@github.com:teknozor/aiCompliance.git
 
 
 ssh-keygen -t ed25519 -f ~/.ssh/aiCompliance_deploy -C "aiCompliance deploy key"
+
+n2) Add the PUBLIC key as a Deploy Key in GitHub
+
+On GitHub:
+
+Repo → Settings
+
+Deploy keys
+
+Add new
+
+Title: rhel-server-aiCompliance
+
+Key: paste the content of:
+
+cat ~/.ssh/aiCompliance_deploy.pub
+
+
+✅ Leave “Allow write access” UNCHECKED (unless you need push)
+
+Save
+
+3) Configure SSH to use this key for this repo
+
+Edit SSH config:
+
+cat >> ~/.ssh/config <<'EOF'
+Host github.com-aiCompliance
+  HostName ssh.github.com
+  Port 443
+  User git
+  IdentityFile ~/.ssh/aiCompliance_deploy
+  IdentitiesOnly yes
+EOF
+
+chmod 600 ~/.ssh/config
+
+
+(Using port 443 avoids your previous hanging issue.)
+
+4) Clone using the deploy key
+git clone github.com-aiCompliance:teknozor/aiCompliance.git
+
+5) Test SSH explicitly (optional but useful)
+ssh -T github.com-aiCompliance
+
+
+Expected:
+
+Hi! You've successfully authenticated, but GitHub does not provide shell access.
+
+When SHOULD you check “Allow write access”?
+
+Only if:
+
+This server needs to push commits
+
+Or tag releases
+
+Or write back CI results
+
+For installation / read-only usage → ❌ do not enable it
+
+Why this is ideal for your case
+
+✔ Works even if port 22 is blocked
+✔ No GitHub password or token stored
+✔ Least-privilege security
+✔ Stable for servers & automation
+
+If you want, I can:
+
+Validate your ~/.ssh/config
+
+Check permissions (ls -l ~/.ssh)
+
+Or give you a one-command clone version
