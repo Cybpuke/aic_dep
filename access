@@ -6,3 +6,34 @@ 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
 
 
 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
+
+Option B (recommended): Use SSH (no tokens, no prompts)
+
+Generate an SSH key (if you don’t already have one):
+
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+
+Press Enter through prompts (or set a passphrase).
+
+Start ssh-agent and add the key:
+
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+
+Copy the public key and add it to GitHub:
+
+cat ~/.ssh/id_ed25519.pub
+
+
+GitHub → Settings → SSH and GPG keys → New SSH key
+
+Test:
+
+ssh -T git@github.com
+
+
+Clone via SSH:
+
+git clone git@github.com:teknozor/aiCompliance.git
