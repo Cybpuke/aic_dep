@@ -1,33 +1,49 @@
-Perfect — thanks for the screenshot. You’re in a clean state now and this is exactly the right moment to do it properly.
+1️⃣ Remove old Docker / containerd (clean slate)
+sudo systemctl stop docker docker.socket containerd || true
+sudo apt-get remove -y docker docker-engine docker.io docker-ce docker-ce-cli containerd runc || true
+sudo rm -rf /var/lib/docker /var/lib/containerd /etc/docker /etc/containerd
 
-You want Docker installed and ALL Docker storage under /mnt/data (not /, not /var).
+2️⃣ Install Docker (official Ubuntu method)
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
 
-Below is the correct, minimal, safe procedure for RHEL / Rocky / Alma / CentOS-like systems.
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-✅ Install Docker using /mnt/data as storage (clean & correct)
-0️⃣ Preconditions (based on your screenshot)
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-/mnt/data exists and has plenty of space ✅
-
-No running Kubernetes / RKE2 / containerd you care about ✅
-
-Root filesystem / is small → must not be used for Docker ✅
-
-1️⃣ Install Docker (official repo)
-sudo yum remove -y docker docker-ce docker-ce-cli docker-engine containerd.io || true
-
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-
-sudo yum install -y docker-ce docker-ce-cli containerd.io
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 
 ⚠️ Do NOT start Docker yet
 
-2️⃣ Configure Docker to use /mnt/data/docker
+3️⃣ Ensure /mnt/data mounts at boot (VERY IMPORTANT)
 
-This is the most important step.
+Check UUID:
 
+sudo blkid /dev/sdb
+
+
+Edit fstab:
+
+sudo nano /etc/fstab
+
+
+Add (adjust UUID and filesystem):
+
+UUID=xxxx-xxxx  /mnt/data  ext4  defaults  0  2
+
+
+Test:
+
+sudo mount -a
+
+4️⃣ Configure Docker to use /mnt/data/docker
 sudo mkdir -p /mnt/data/docker
 sudo mkdir -p /etc/docker
 
@@ -38,87 +54,9 @@ cat <<'EOF' | sudo tee /etc/docker/daemon.json
 }
 EOF
 
-
-Fix permissions:
-
 sudo chmod 600 /etc/docker/daemon.json
 
-3️⃣ Make sure /mnt/data is mounted at boot (IMPORTANT)
-
-Check:
-
-mount | grep /mnt/data
-
-
-If it’s not in /etc/fstab, add it (example for /dev/sdb):
-
-sudo blkid /dev/sdb
-
-
-Then:
-
-sudo vi /etc/fstab
-
-
-Add (adjust UUID):
-
-UUID=xxxx-xxxx  /mnt/data  ext4  defaults  0  2
-
-
-Test:
-
-sudo mount -a
-
-4️⃣ Start Docker
+5️⃣ Start Docker
 sudo systemctl daemon-reload
 sudo systemctl enable docker
 sudo systemctl start docker
-
-5️⃣ VERIFY (this must be correct)
-docker info | grep "Docker Root Dir"
-
-✅ REQUIRED OUTPUT
-Docker Root Dir: /mnt/data/docker
-
-
-If you see /var/lib/docker → STOP, something is wrong.
-
-6️⃣ Test with a large image (real proof)
-docker pull ollama/ollama:latest
-
-
-Then:
-
-df -h / /mnt/data
-
-✅ Correct behavior
-
-/mnt/data usage increases
-
-/ stays mostly unchanged
-
-NO /var/lib/containerd errors
-
-7️⃣ (Optional) Docker Compose
-sudo yum install -y docker-compose-plugin
-docker compose version
-
-🧠 Why this works (short explanation)
-
-Docker always uses containerd internally → that’s normal
-
-What you removed earlier was external/system containerd
-
-data-root forces all layers, images, volumes to /mnt/data
-
-OverlayFS works fine on /mnt/data
-
-If anything fails, send me ONLY this:
-cat /etc/docker/daemon.json
-docker info
-df -h / /mnt/data
-
-
-I’ll fix it in one reply.
-
-You’re finally setting this up the right way 👍
