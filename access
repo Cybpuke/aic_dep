@@ -126,3 +126,6 @@ Or give you a one-command clone version
 read -s -p "GitHub PAT: " TOKEN; echo
 git clone https://github.com/teknozor/aiCompliance.git
 unset TOKEN
+
+
+git clone https://badislaffet1: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@github.com/teknozor/aiCompliance.git
