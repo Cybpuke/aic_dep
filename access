@@ -3,7 +3,7 @@ git clone https://github.com/teknozor/aiCompliance
 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
 
 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
-
+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
 Got you. Here’s the simplest step-by-step to “connect your GitHub account” on this RHEL server so that git clone works directly (no surprises).
 
 Step 1 — Make sure git is installed
