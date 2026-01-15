@@ -1,56 +1,25 @@
-Got it — if you’re using Docker, then Docker is filling up / because Docker’s default data directory is:
-
-/var/lib/docker (on /, which is 100% full in your screenshot)
-
-Even if /mnt/data on /dev/sdb has tons of space, Docker won’t use it unless you move Docker’s data-root there.
-
-Here’s the clean, safe way.
-
-0) Confirm Docker data directory and size
-docker info 2>/dev/null | egrep -i 'Docker Root Dir|Storage Driver'
-sudo du -sh /var/lib/docker 2>/dev/null
-df -h /
-df -h /mnt/data
-
-1) Stop Docker
 sudo systemctl stop docker
-sudo systemctl stop docker.socket 2>/dev/null || true
+sudo systemctl stop containerd
 
+sudo mkdir -p /mnt/data/containerd
+sudo rsync -aHAX --numeric-ids /var/lib/containerd/ /mnt/data/containerd/
 
-Check it’s stopped:
+# Ensure containerd config exists
+if [ ! -f /etc/containerd/config.toml ]; then
+  sudo mkdir -p /etc/containerd
+  sudo containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
+fi
 
-sudo systemctl is-active docker || true
+# Set containerd root to /mnt/data/containerd
+sudo sed -i 's|^root = .*|root = "/mnt/data/containerd"|' /etc/containerd/config.toml
 
-2) Copy Docker data to /mnt/data
-sudo mkdir -p /mnt/data/docker
-sudo rsync -aHAX --numeric-ids /var/lib/docker/ /mnt/data/docker/
+# Move old dir out of the way (safe rollback)
+sudo mv /var/lib/containerd /var/lib/containerd.bak
+sudo mkdir -p /var/lib/containerd
 
-3) Tell Docker to use /mnt/data/docker as its root
-
-Create/update /etc/docker/daemon.json:
-
-sudo mkdir -p /etc/docker
-cat <<'EOF' | sudo tee /etc/docker/daemon.json
-{
-  "data-root": "/mnt/data/docker"
-}
-EOF
-
-4) Move old directory out of the way (don’t delete yet)
-sudo mv /var/lib/docker /var/lib/docker.bak
-sudo mkdir -p /var/lib/docker
-
-5) Start Docker and verify
-sudo systemctl daemon-reload
+sudo systemctl start containerd
 sudo systemctl start docker
-sudo systemctl status docker --no-pager
 
-
-Verify Docker is now using the new path:
-
-docker info | grep -i "Docker Root Dir"
-
-
-You should see:
-
-Docker Root Dir: /mnt/data/docker
+# Verify
+containerd config dump | egrep '^(root|state)'
+df -h / /mnt/data
