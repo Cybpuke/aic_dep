@@ -1,86 +1,124 @@
-HARD RESET: Docker-only, no system containerd usage
+Perfect — thanks for the screenshot. You’re in a clean state now and this is exactly the right moment to do it properly.
 
-⚠️ This will delete all containers/images. That’s intentional.
+You want Docker installed and ALL Docker storage under /mnt/data (not /, not /var).
 
-1️⃣ Stop EVERYTHING
-sudo systemctl stop docker docker.socket || true
-sudo systemctl stop containerd || true
-sudo systemctl stop rke2-agent rke2-server || true
+Below is the correct, minimal, safe procedure for RHEL / Rocky / Alma / CentOS-like systems.
 
+✅ Install Docker using /mnt/data as storage (clean & correct)
+0️⃣ Preconditions (based on your screenshot)
 
-Confirm nothing is running:
+/mnt/data exists and has plenty of space ✅
 
-ps aux | egrep 'docker|containerd|rke2' | grep -v grep
+No running Kubernetes / RKE2 / containerd you care about ✅
 
-2️⃣ REMOVE RKE2 COMPLETELY (mandatory)
+Root filesystem / is small → must not be used for Docker ✅
 
-RKE2 forces containerd. You cannot keep it.
+1️⃣ Install Docker (official repo)
+sudo yum remove -y docker docker-ce docker-ce-cli docker-engine containerd.io || true
 
-sudo /usr/local/bin/rke2-uninstall.sh 2>/dev/null || true
-sudo rm -rf /var/lib/rancher /etc/rancher
+sudo yum install -y yum-utils
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
-
-Verify:
-
-ls /var/lib/rancher || echo "RKE2 gone"
-
-3️⃣ REMOVE system containerd (this is safe now)
-sudo systemctl disable --now containerd || true
-sudo systemctl mask containerd
-sudo yum remove -y containerd || true
+sudo yum install -y docker-ce docker-ce-cli containerd.io
 
 
-Confirm:
+⚠️ Do NOT start Docker yet
 
-which containerd || echo "containerd binary removed"
-systemctl is-active containerd || true
+2️⃣ Configure Docker to use /mnt/data/docker
 
-4️⃣ WIPE ALL OLD STORAGE ON /
+This is the most important step.
 
-This is what is killing you.
-
-sudo rm -rf /var/lib/containerd
-sudo rm -rf /var/lib/docker
-sudo rm -rf /etc/containerd
-
-
-Check space:
-
-df -h /
-
-
-You should now have free space.
-
-5️⃣ Configure Docker to use /mnt/data/docker ONLY
 sudo mkdir -p /mnt/data/docker
 sudo mkdir -p /etc/docker
 
 cat <<'EOF' | sudo tee /etc/docker/daemon.json
 {
-  "data-root": "/mnt/data/docker"
+  "data-root": "/mnt/data/docker",
+  "storage-driver": "overlay2"
 }
 EOF
 
-6️⃣ Reinstall Docker cleanly (important)
-sudo yum remove -y docker docker-ce docker-ce-cli docker-engine || true
-sudo yum install -y docker-ce docker-ce-cli
 
-7️⃣ Start Docker and VERIFY (this is the key check)
-sudo systemctl daemon-reexec
+Fix permissions:
+
+sudo chmod 600 /etc/docker/daemon.json
+
+3️⃣ Make sure /mnt/data is mounted at boot (IMPORTANT)
+
+Check:
+
+mount | grep /mnt/data
+
+
+If it’s not in /etc/fstab, add it (example for /dev/sdb):
+
+sudo blkid /dev/sdb
+
+
+Then:
+
+sudo vi /etc/fstab
+
+
+Add (adjust UUID):
+
+UUID=xxxx-xxxx  /mnt/data  ext4  defaults  0  2
+
+
+Test:
+
+sudo mount -a
+
+4️⃣ Start Docker
+sudo systemctl daemon-reload
+sudo systemctl enable docker
 sudo systemctl start docker
-docker info | egrep -i 'Docker Root Dir|containerd'
+
+5️⃣ VERIFY (this must be correct)
+docker info | grep "Docker Root Dir"
 
 ✅ REQUIRED OUTPUT
-
-You must see:
-
 Docker Root Dir: /mnt/data/docker
 
 
-And NO references to:
+If you see /var/lib/docker → STOP, something is wrong.
 
-/var/lib/containerd
-unix:///run/containerd/containerd.sock
+6️⃣ Test with a large image (real proof)
+docker pull ollama/ollama:latest
 
 
-If you still see them → stop here and paste the output.
+Then:
+
+df -h / /mnt/data
+
+✅ Correct behavior
+
+/mnt/data usage increases
+
+/ stays mostly unchanged
+
+NO /var/lib/containerd errors
+
+7️⃣ (Optional) Docker Compose
+sudo yum install -y docker-compose-plugin
+docker compose version
+
+🧠 Why this works (short explanation)
+
+Docker always uses containerd internally → that’s normal
+
+What you removed earlier was external/system containerd
+
+data-root forces all layers, images, volumes to /mnt/data
+
+OverlayFS works fine on /mnt/data
+
+If anything fails, send me ONLY this:
+cat /etc/docker/daemon.json
+docker info
+df -h / /mnt/data
+
+
+I’ll fix it in one reply.
+
+You’re finally setting this up the right way 👍
