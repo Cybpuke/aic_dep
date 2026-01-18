@@ -1,0 +1,55 @@
+wrker1
+
+
+
+sudo dnf install -y nfs-utils
+
+sudo systemctl enable --now nfs-server
+
+
+
+sudo mkdir -p /data/nfs/airflow
+
+sudo chown -R nobody:nobody /data/nfs/airflow
+
+sudo chmod -R 777 /data/nfs/airflow
+
+
+
+nano /etc/exports 
+
+
+
+/data/nfs 192.168.5.0/24(rw,sync,no_root_squash,no_all_squash)
+
+
+
+sudo exportfs -rav
+
+
+
+
+
+on all nodes 
+
+
+
+sudo dnf install -y nfs-utils
+
+
+
+helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+
+
+
+helm install nfs-provisioner nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+
+  --create-namespace \
+
+  --namespace nfs-provisioner \
+
+  --set nfs.server=192.168.5.241 \
+
+  --set nfs.path=/data/nfs/airflow \
+
+  --set storageClass.name=nfs-client
