@@ -1,18 +1,18 @@
-wrker1
+worker 2
 
 
 
 sudo dnf install -y nfs-utils
 
-sudo systemctl enable --now nfs-server
+sudo systemctl enable --now nfs-server rpcbind
 
 
 
 sudo mkdir -p /data/nfs/airflow
 
-sudo chown -R nobody:nobody /data/nfs/airflow
+sudo chown -R 50000:50000 /data/nfs/airflow
 
-sudo chmod -R 777 /data/nfs/airflow
+sudo chmod -R 770 /data/nfs/airflow
 
 
 
@@ -20,25 +20,37 @@ nano /etc/exports
 
 
 
-/data/nfs 192.168.5.0/24(rw,sync,no_root_squash,no_all_squash)
+/data/nfs/airflow 192.168.5.0/24(rw,sync,no_root_squash,no_all_squash)
 
 
 
-sudo exportfs -rav
+sudo firewall-cmd --permanent --add-service={nfs,mountd,rpc-bind}
+
+sudo firewall-cmd --reload
 
 
 
 
 
-on all nodes 
+all nodes 
 
 
 
 sudo dnf install -y nfs-utils
 
+sudo systemctl enable --now rpcbind
 
 
-helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+
+sudo setsebool -P virt_use_nfs 1
+
+
+
+msr1
+
+
+
+helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
 
 
 
@@ -48,7 +60,7 @@ helm install nfs-provisioner nfs-subdir-external-provisioner/nfs-subdir-external
 
   --namespace nfs-provisioner \
 
-  --set nfs.server=192.168.5.241 \
+  --set nfs.server=192.168.5.242 \
 
   --set nfs.path=/data/nfs/airflow \
 
